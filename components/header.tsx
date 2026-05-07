@@ -4,6 +4,7 @@ import { Trophy, Repeat, Search, Eye, Camera } from "lucide-react";
 import type { AlbumStats, User, ViewingAlbum, CollectionState } from "@/lib/types";
 import { AlbumSelector } from "./album-selector";
 import { SmartExchangeButton } from "./smart-exchange";
+import pkg from "../package.json";
 
 interface HeaderProps {
   stats: AlbumStats;
@@ -30,7 +31,7 @@ export function Header({ stats, activeTab, onTabChange, user, isSyncing, current
             <Trophy className="w-6 h-6 text-accent" />
             <div>
               <h1 className="text-lg font-bold text-foreground">
-                PANINI APP
+                PANINI APP <span className="text-[10px] font-normal text-muted-foreground ml-1">v{pkg.version}</span>
               </h1>
               <p className="text-xs text-muted-foreground">
                 Hecho por{" "}

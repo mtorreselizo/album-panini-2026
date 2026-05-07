@@ -22,15 +22,13 @@ export async function analyzeStickers(base64Images: string[]) {
     }));
 
     const response = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: "gpt-4o-mini",
       messages: [
         {
           role: "system",
           content: `Eres un sistema OCR especializado en estampas Panini del Mundial 2026.
 
-Te voy a enviar 4 imágenes de las MISMAS estampas, cada una rotada a un ángulo diferente: 0°, 90°, 180° y 270°. Cada imagen está a resolución completa.
-
-Tu tarea es leer los códigos impresos en el REVERSO (lado blanco con texto) de cada estampa.
+Tu tarea es leer los códigos impresos en el REVERSO (lado blanco con texto) de cada estampa visible en la imagen.
 
 FORMATO DE LOS CÓDIGOS:
 - Código de país en mayúsculas + número pegado, sin espacio.
@@ -38,17 +36,17 @@ FORMATO DE LOS CÓDIGOS:
 - Las letras son 2–3 caracteres. El número va del 1 al 30.
 
 INSTRUCCIONES:
-1. Revisa las 4 imágenes. Al menos en una de ellas el texto estará derecho y legible.
-2. Usa la imagen donde el texto se vea MÁS CLARO y recto para identificar los códigos.
+1. Lee todos los códigos visibles.
+2. Si un código aparece en varias estampas físicas distintas en la misma foto (por ejemplo, hay dos estampas "GER1"), DEBES INCLUIRLO MÚLTIPLES VECES, una vez por cada estampa física. No agrupes las repetidas.
 3. Ignora el logo de FIFA, el logo de PANINI, y cualquier texto legal pequeño.
-4. Devuelve cada código UNA SOLA VEZ aunque aparezca en varias imágenes.
 
 FORMATO DE SALIDA (JSON estricto, sin texto extra):
 {
   "conteo_total": <número>,
   "estampas": [
     {"pais": "GER", "numero": 1},
-    {"pais": "GER", "numero": 2}
+    {"pais": "GER", "numero": 1},
+    {"pais": "MEX", "numero": 14}
   ]
 }`
         },
@@ -57,7 +55,7 @@ FORMATO DE SALIDA (JSON estricto, sin texto extra):
           content: [
             {
               type: "text",
-              text: "Aquí están las 4 imágenes de las mismas estampas rotadas a diferentes ángulos. Identifica todos los códigos y devuelve el JSON.",
+              text: "Identifica todos los códigos de las estampas y devuelve el JSON. Asegúrate de incluir las estampas repetidas si aparecen más de una vez en la foto.",
             },
             ...imageContent,
           ],
@@ -83,10 +81,11 @@ FORMATO DE SALIDA (JSON estricto, sin texto extra):
       throw new Error("La respuesta de OpenAI no es un JSON válido. Intenta de nuevo.");
     }
 
-    // Transform to simple string array
+    // Transform to simple string array and sort alphabetically ascending
     const stickers = (parsed.estampas || [])
       .map((item: any) => `${item.pais}${item.numero}`.toUpperCase().replace(/\s+/g, ''))
-      .filter((s: string) => s.length > 0);
+      .filter((s: string) => s.length > 0)
+      .sort((a: string, b: string) => a.localeCompare(b));
 
     console.log(`[analyzeStickers] Detected ${stickers.length} stickers:`, stickers);
     return stickers;

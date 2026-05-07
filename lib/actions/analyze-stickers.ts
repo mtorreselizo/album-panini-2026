@@ -17,20 +17,30 @@ export async function analyzeStickers(base64Image: string) {
       messages: [
         {
           role: "system",
-          content: `Eres un experto en el álbum Panini de la Copa Mundial 2026. 
-          Tu tarea es identificar los códigos de las estampas en la imagen. 
-          
-          REGLAS CRÍTICAS:
-          1. Los códigos tienen formato: [PAÍS][NÚMERO] (ej. MEX14, ARG10, BRA1) o FWC[NÚMERO] (ej. FWC1).
-          2. IMPORTANTE: Las estampas pueden estar rotadas, de lado o de cabeza. Analiza la imagen desde todas las orientaciones posibles para encontrar los códigos.
-          3. Responde EXCLUSIVAMENTE en formato JSON con la siguiente estructura: {"stickers": ["CODIGO1", "CODIGO2"]}`
+          content: `Eres un experto en visión artificial para coleccionables. Tu tarea es extraer códigos de estampas Panini de una imagen.
+
+          INSTRUCCIONES:
+          1. Analiza TODA la imagen. Las estampas pueden estar en cualquier orientación (rotadas 90°, 180°, o en diagonal) y pueden estar encimadas.
+          2. Busca el patrón: Código de País (3 letras mayúsculas) seguido de un espacio y el Número de la estampa (ej. ARG 10, GER 3).
+          3. Ignora cualquier otro texto como 'FIFA', 'OFFICIAL LICENSED PRODUCT' o 'PANINI'.
+          4. Si una estampa es parcialmente visible pero el código y número son legibles, inclúyela.
+
+          FORMATO DE SALIDA:
+          Devuelve únicamente un objeto JSON con la siguiente estructura, sin texto adicional:
+          {
+            "conteo_total": [número de estampas detectadas],
+            "estampas": [
+              {"pais": "COD", "numero": X},
+              {"pais": "COD", "numero": Y}
+            ]
+          }`
         },
         {
           role: "user",
           content: [
             {
               type: "text",
-              text: "Identifica todas las estampas Panini en esta imagen, sin importar su orientación. Devuelve el JSON con los códigos."
+              text: "Identifica todas las estampas Panini en esta imagen, sin importar su orientación. Devuelve el JSON solicitado."
             },
             {
               type: "image_url",
@@ -46,8 +56,10 @@ export async function analyzeStickers(base64Image: string) {
 
     const content = response.choices[0]?.message?.content || "{}";
     const parsed = JSON.parse(content);
-    const stickers = (parsed.stickers || [])
-      .map((s: string) => s.trim().toUpperCase())
+    
+    // Transform the new structure back to the simple string array the app expects
+    const stickers = (parsed.estampas || [])
+      .map((item: any) => `${item.pais}${item.numero}`.toUpperCase().replace(/\s+/g, ''))
       .filter((s: string) => s.length > 0);
 
     return stickers;

@@ -1,10 +1,14 @@
 "use server";
 
 import OpenAI from "openai";
+import { teams } from "../album-data";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
+
+const VALID_CODES = teams.map(t => t.code);
+VALID_CODES.push("FWC", "00");
 
 export async function analyzeStickers(base64Images: string[]) {
   if (!process.env.OPENAI_API_KEY) {
@@ -30,15 +34,21 @@ export async function analyzeStickers(base64Images: string[]) {
 
 Tu tarea es leer los códigos impresos en el REVERSO (lado blanco con texto) de cada estampa visible en la imagen.
 
-FORMATO DE LOS CÓDIGOS:
-- Código de país en mayúsculas + número pegado, sin espacio.
-- Ejemplos: GER1, GER2, MEX14, ARG10, BRA5, FWC1, USA20, FRA3.
-- Las letras son 2–3 caracteres. El número va del 1 al 30.
+CÓDIGOS DE PAÍS VÁLIDOS (ESTRICTO):
+${VALID_CODES.join(", ")}
 
-INSTRUCCIONES:
+FORMATO DE LOS CÓDIGOS:
+- Código de país en mayúsculas (DE LA LISTA ANTERIOR) + número pegado, sin espacio.
+- Para países, el número va del 1 al 20.
+- Para "FWC", el número va del 1 al 19.
+- El código especial "00" no lleva número.
+
+INSTRUCCIONES Y MANEJO DE ROTACIÓN:
 1. Lee todos los códigos visibles.
-2. Si un código aparece en varias estampas físicas distintas en la misma foto (por ejemplo, hay dos estampas "GER1"), DEBES INCLUIRLO MÚLTIPLES VECES, una vez por cada estampa física. No agrupes las repetidas.
-3. Ignora el logo de FIFA, el logo de PANINI, y cualquier texto legal pequeño.
+2. Las estampas pueden estar rotadas en CUALQUIER ángulo (45°, 90°, 180°, etc). ¡Ten mucho cuidado! Una "M" de cabeza parece "W", una "E" rotada parece "M" o "W", un "6" rotado parece "9". 
+3. OBLIGATORIO: Compara lo que lees con la LISTA DE CÓDIGOS VÁLIDOS. Si lees algo parecido a "FRA" pero está rotado, asegúrate de que sea "FRA" y no otra cosa. Nunca inventes un país que no esté en la lista.
+4. Si un código aparece en varias estampas físicas distintas en la misma foto (por ejemplo, hay dos estampas "GER1"), DEBES INCLUIRLO MÚLTIPLES VECES, una vez por cada estampa física. No agrupes las repetidas.
+5. Ignora el logo de FIFA, el logo de PANINI, y cualquier texto legal.
 
 FORMATO DE SALIDA (JSON estricto, sin texto extra):
 {
@@ -55,7 +65,7 @@ FORMATO DE SALIDA (JSON estricto, sin texto extra):
           content: [
             {
               type: "text",
-              text: "Identifica todos los códigos de las estampas y devuelve el JSON. Asegúrate de incluir las estampas repetidas si aparecen más de una vez en la foto.",
+              text: "Identifica todos los códigos de las estampas y devuelve el JSON. Asegúrate de incluir las repetidas y usa SOLO los códigos de país válidos.",
             },
             ...imageContent,
           ],
@@ -63,7 +73,7 @@ FORMATO DE SALIDA (JSON estricto, sin texto extra):
       ],
       response_format: { type: "json_object" },
     }, {
-      signal: AbortSignal.timeout(45000), // 45 second timeout for 4 images
+      signal: AbortSignal.timeout(45000), // 45 second timeout
     });
 
     const rawContent = response.choices[0]?.message?.content;
@@ -81,13 +91,31 @@ FORMATO DE SALIDA (JSON estricto, sin texto extra):
       throw new Error("La respuesta de OpenAI no es un JSON válido. Intenta de nuevo.");
     }
 
-    // Transform to simple string array and sort alphabetically ascending
+    // Transform to simple string array, filter valid codes, and sort
     const stickers = (parsed.estampas || [])
-      .map((item: any) => `${item.pais}${item.numero}`.toUpperCase().replace(/\s+/g, ''))
-      .filter((s: string) => s.length > 0)
+      .map((item: any) => {
+        const p = (item.pais || "").toUpperCase();
+        const n = item.numero !== undefined && item.numero !== null ? String(item.numero) : "";
+        return `${p}${n}`.replace(/\s+/g, "");
+      })
+      .filter((s: string) => {
+        if (s === "00") return true;
+        const match = s.match(/^([A-Z]{3}|FWC)(\d+)$/);
+        if (!match) return false;
+        
+        const code = match[1];
+        const num = parseInt(match[2], 10);
+        
+        // Strict validation
+        if (!VALID_CODES.includes(code)) return false;
+        if (code === "FWC" && (num < 1 || num > 19)) return false;
+        if (code !== "FWC" && (num < 1 || num > 20)) return false;
+        
+        return true;
+      })
       .sort((a: string, b: string) => a.localeCompare(b));
 
-    console.log(`[analyzeStickers] Detected ${stickers.length} stickers:`, stickers);
+    console.log(`[analyzeStickers] Detected ${stickers.length} VALID stickers:`, stickers);
     return stickers;
   } catch (error: any) {
     console.error("OpenAI Analysis Error:", error);

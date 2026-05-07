@@ -106,61 +106,48 @@ export function StickerScanner({ isOpen, onClose, onImport }: StickerScannerProp
     if (!videoRef.current || !canvasRef.current) return;
 
     const video = videoRef.current;
+    const canvas = canvasRef.current;
 
-    // Max 900px por imagen — alta resolución pero manejable
-    const MAX = 900;
-    let sw = video.videoWidth;
-    let sh = video.videoHeight;
-    if (sw > sh) { if (sw > MAX) { sh = Math.round(sh * MAX / sw); sw = MAX; } }
-    else          { if (sh > MAX) { sw = Math.round(sw * MAX / sh); sh = MAX; } }
+    // Alta resolución — clave para leer texto pequeño en los códigos
+    const MAX = 1500;
+    let w = video.videoWidth;
+    let h = video.videoHeight;
+    if (w > h) { if (w > MAX) { h = Math.round(h * MAX / w); w = MAX; } }
+    else        { if (h > MAX) { w = Math.round(w * MAX / h); h = MAX; } }
 
-    // Helper: aplica contraste de color suave y devuelve base64
-    const processFrame = (deg: number): string => {
-      const cvs = document.createElement("canvas");
-      const isSwapped = deg === 90 || deg === 270;
-      cvs.width  = isSwapped ? sh : sw;
-      cvs.height = isSwapped ? sw : sh;
-      const c = cvs.getContext("2d", { willReadFrequently: true })!;
-      c.save();
-      c.translate(cvs.width / 2, cvs.height / 2);
-      c.rotate((deg * Math.PI) / 180);
-      c.drawImage(video, -sw / 2, -sh / 2, sw, sh);
-      c.restore();
+    canvas.width  = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
+    ctx.drawImage(video, 0, 0, w, h);
 
-      // Contraste suave en color
-      const id = c.getImageData(0, 0, cvs.width, cvs.height);
-      const d = id.data;
-      const CONTRAST = 25;
-      const f = (259 * (CONTRAST + 255)) / (255 * (259 - CONTRAST));
-      for (let i = 0; i < d.length; i += 4) {
-        d[i]     = Math.min(255, Math.max(0, f * (d[i]     - 128) + 128));
-        d[i + 1] = Math.min(255, Math.max(0, f * (d[i + 1] - 128) + 128));
-        d[i + 2] = Math.min(255, Math.max(0, f * (d[i + 2] - 128) + 128));
-      }
-      c.putImageData(id, 0, 0);
-      return cvs.toDataURL("image/jpeg", 0.82);
-    };
+    // Contraste suave en color (sin escala de grises)
+    const imageData = ctx.getImageData(0, 0, w, h);
+    const d = imageData.data;
+    const f = (259 * (280)) / (255 * (234)); // CONTRAST=25
+    for (let i = 0; i < d.length; i += 4) {
+      d[i]     = Math.min(255, Math.max(0, f * (d[i]     - 128) + 128));
+      d[i + 1] = Math.min(255, Math.max(0, f * (d[i + 1] - 128) + 128));
+      d[i + 2] = Math.min(255, Math.max(0, f * (d[i + 2] - 128) + 128));
+    }
+    ctx.putImageData(imageData, 0, 0);
 
-    // Generar las 4 rotaciones — imagen a plena resolución en cada ángulo
-    const images = [0, 90, 180, 270].map(deg => processFrame(deg));
+    const base64Data  = canvas.toDataURL("image/jpeg", 0.88);
+    const base64Image = base64Data.split(",")[1];
 
-    // Usar la imagen a 0° como preview visible
-    const previewData = images[0];
-    setCapturedImage(previewData);
+    setCapturedImage(base64Data);
     stopCamera();
     setStep("loading");
     setError(null);
 
     try {
-      const base64Array = images.map(img => img.split(",")[1]);
-      const stickers = await analyzeStickers(base64Array);
+      const stickers = await analyzeStickers([base64Image]);
       setResults(stickers);
       setStep("results");
       if (stickers.length === 0) {
-        toast.warning("No se detectaron estampas. Intenta con mejor iluminación o más cerca.");
+        toast.warning("No se detectaron códigos. Asegúrate de que los códigos estén visibles y horizontales.");
       }
     } catch (err: any) {
-      console.error("[StickerScanner] Error from analyzeStickers:", err);
+      console.error("[StickerScanner] Error:", err);
       const msg = err?.message || "Error desconocido al analizar la imagen.";
       setError(msg);
       toast.error(msg);
@@ -234,11 +221,18 @@ export function StickerScanner({ isOpen, onClose, onImport }: StickerScannerProp
                     </Button>
                   </div>
                 )}
-                {/* Overlay guides */}
-                <div className="absolute inset-4 border-2 border-white/30 border-dashed rounded-lg pointer-events-none flex items-center justify-center">
-                  <p className="text-white/60 text-xs text-center px-4">
-                    Coloca las estampas dentro del cuadro y asegúrate de que haya buena luz.
-                  </p>
+                {/* Overlay guide */}
+                <div className="absolute inset-4 border-2 border-yellow-400/70 border-dashed rounded-lg pointer-events-none flex flex-col items-center justify-between py-3">
+                  <div className="bg-black/60 rounded px-2 py-1">
+                    <p className="text-yellow-300 text-xs text-center font-semibold">
+                      📍 Centra las estampas aquí
+                    </p>
+                  </div>
+                  <div className="bg-black/60 rounded px-3 py-2 mx-4">
+                    <p className="text-white text-xs text-center">
+                      ↗️ Asegúrate de que los códigos (ej. GER1) estén <strong>horizontales y legibles</strong>
+                    </p>
+                  </div>
                 </div>
               </div>
               <Button 

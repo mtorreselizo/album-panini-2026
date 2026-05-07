@@ -6,12 +6,21 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-export async function analyzeStickers(base64Image: string) {
+export async function analyzeStickers(base64Images: string[]) {
   if (!process.env.OPENAI_API_KEY) {
     throw new Error("Missing OPENAI_API_KEY");
   }
 
   try {
+    // Build image content entries — one per rotation (0°, 90°, 180°, 270°)
+    const imageContent = base64Images.map((b64, i) => ({
+      type: "image_url" as const,
+      image_url: {
+        url: `data:image/jpeg;base64,${b64}`,
+        detail: "high" as const,
+      },
+    }));
+
     const response = await openai.chat.completions.create({
       model: "gpt-4o",
       messages: [
@@ -19,7 +28,9 @@ export async function analyzeStickers(base64Image: string) {
           role: "system",
           content: `Eres un sistema OCR especializado en estampas Panini del Mundial 2026.
 
-Tu tarea es leer los códigos impresos en el REVERSO (lado blanco con texto) de cada estampa visible en la imagen.
+Te voy a enviar 4 imágenes de las MISMAS estampas, cada una rotada a un ángulo diferente: 0°, 90°, 180° y 270°. Cada imagen está a resolución completa.
+
+Tu tarea es leer los códigos impresos en el REVERSO (lado blanco con texto) de cada estampa.
 
 FORMATO DE LOS CÓDIGOS:
 - Código de país en mayúsculas + número pegado, sin espacio.
@@ -27,10 +38,10 @@ FORMATO DE LOS CÓDIGOS:
 - Las letras son 2–3 caracteres. El número va del 1 al 30.
 
 INSTRUCCIONES:
-1. Lee el código impreso en cada estampa, aunque estén rotadas, de lado o de cabeza.
-2. Ignora el logo de FIFA, el logo de PANINI, y cualquier texto legal pequeño.
-3. Si el código es parcialmente visible pero legible, inclúyes.
-4. Devuelve cada código una sola vez aunque aparezca en varias estampas.
+1. Revisa las 4 imágenes. Al menos en una de ellas el texto estará derecho y legible.
+2. Usa la imagen donde el texto se vea MÁS CLARO y recto para identificar los códigos.
+3. Ignora el logo de FIFA, el logo de PANINI, y cualquier texto legal pequeño.
+4. Devuelve cada código UNA SOLA VEZ aunque aparezca en varias imágenes.
 
 FORMATO DE SALIDA (JSON estricto, sin texto extra):
 {
@@ -46,20 +57,15 @@ FORMATO DE SALIDA (JSON estricto, sin texto extra):
           content: [
             {
               type: "text",
-              text: "Identifica todas las estampas Panini en esta imagen, sin importar su orientación. Devuelve el JSON solicitado."
+              text: "Aquí están las 4 imágenes de las mismas estampas rotadas a diferentes ángulos. Identifica todos los códigos y devuelve el JSON.",
             },
-            {
-              type: "image_url",
-              image_url: {
-                url: `data:image/jpeg;base64,${base64Image}`,
-              },
-            },
+            ...imageContent,
           ],
         },
       ],
       response_format: { type: "json_object" },
     }, {
-      signal: AbortSignal.timeout(30000), // 30 second timeout
+      signal: AbortSignal.timeout(45000), // 45 second timeout for 4 images
     });
 
     const rawContent = response.choices[0]?.message?.content;
@@ -77,7 +83,7 @@ FORMATO DE SALIDA (JSON estricto, sin texto extra):
       throw new Error("La respuesta de OpenAI no es un JSON válido. Intenta de nuevo.");
     }
 
-    // Transform the new structure back to the simple string array the app expects
+    // Transform to simple string array
     const stickers = (parsed.estampas || [])
       .map((item: any) => `${item.pais}${item.numero}`.toUpperCase().replace(/\s+/g, ''))
       .filter((s: string) => s.length > 0);
@@ -86,8 +92,7 @@ FORMATO DE SALIDA (JSON estricto, sin texto extra):
     return stickers;
   } catch (error: any) {
     console.error("OpenAI Analysis Error:", error);
-    
-    // Handle specific OpenAI errors
+
     if (error.status === 401) {
       throw new Error("Error de autenticación: La API Key de OpenAI es inválida.");
     }
@@ -97,7 +102,7 @@ FORMATO DE SALIDA (JSON estricto, sin texto extra):
     if (error.status === 413) {
       throw new Error("Imagen demasiado grande para procesar.");
     }
-    
+
     throw new Error(error.message || "No se pudo analizar la imagen. Intenta de nuevo.");
   }
 }

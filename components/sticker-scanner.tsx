@@ -106,66 +106,34 @@ export function StickerScanner({ isOpen, onClose, onImport }: StickerScannerProp
     if (!videoRef.current || !canvasRef.current) return;
 
     const video = videoRef.current;
-    
-    // Step 1: Capture original frame at max 800px (smaller since we'll make 4 copies)
-    const MAX = 800;
-    let sw = video.videoWidth;
-    let sh = video.videoHeight;
-    if (sw > sh) { if (sw > MAX) { sh = Math.round(sh * MAX / sw); sw = MAX; } }
-    else          { if (sh > MAX) { sw = Math.round(sw * MAX / sh); sh = MAX; } }
+    const canvas = canvasRef.current;
 
-    // Step 2: Draw the original into a temporary canvas
-    const tmpCanvas = document.createElement("canvas");
-    tmpCanvas.width = sw;
-    tmpCanvas.height = sh;
-    const tmpCtx = tmpCanvas.getContext("2d", { willReadFrequently: true })!;
-    tmpCtx.drawImage(video, 0, 0, sw, sh);
+    // Max 1400px — alta resolución para que el OCR funcione bien en texto pequeño
+    const MAX = 1400;
+    let w = video.videoWidth;
+    let h = video.videoHeight;
+    if (w > h) { if (w > MAX) { h = Math.round(h * MAX / w); w = MAX; } }
+    else        { if (h > MAX) { w = Math.round(w * MAX / h); h = MAX; } }
 
-    // Step 3: Boost color contrast WITHOUT grayscale — AI vision models work better in color
-    const imageData = tmpCtx.getImageData(0, 0, sw, sh);
+    canvas.width  = w;
+    canvas.height = h;
+
+    const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
+    ctx.drawImage(video, 0, 0, w, h);
+
+    // Ligero boost de contraste en color — NO escala de grises
+    const imageData = ctx.getImageData(0, 0, w, h);
     const d = imageData.data;
-    const CONTRAST = 30; // Gentle contrast boost, keeps color intact
+    const CONTRAST = 25;
     const factor = (259 * (CONTRAST + 255)) / (255 * (259 - CONTRAST));
     for (let i = 0; i < d.length; i += 4) {
-      d[i]     = Math.min(255, Math.max(0, factor * (d[i]     - 128) + 128)); // R
-      d[i + 1] = Math.min(255, Math.max(0, factor * (d[i + 1] - 128) + 128)); // G
-      d[i + 2] = Math.min(255, Math.max(0, factor * (d[i + 2] - 128) + 128)); // B
+      d[i]     = Math.min(255, Math.max(0, factor * (d[i]     - 128) + 128));
+      d[i + 1] = Math.min(255, Math.max(0, factor * (d[i + 1] - 128) + 128));
+      d[i + 2] = Math.min(255, Math.max(0, factor * (d[i + 2] - 128) + 128));
     }
-    tmpCtx.putImageData(imageData, 0, 0);
+    ctx.putImageData(imageData, 0, 0);
 
-    // Step 4: Build a 2×2 collage with the image at 0°, 90°, 180°, 270°
-    // This lets the AI see all rotations in ONE API call — no extra cost!
-    const canvas = canvasRef.current;
-    canvas.width  = sw * 2;
-    canvas.height = sh * 2;
-    const ctx = canvas.getContext("2d")!;
-
-    const drawRotated = (deg: number, offsetX: number, offsetY: number) => {
-      ctx.save();
-      ctx.translate(offsetX + sw / 2, offsetY + sh / 2);
-      ctx.rotate((deg * Math.PI) / 180);
-      // For 90° and 270°, swap w/h visually
-      if (deg === 90 || deg === 270) {
-        ctx.drawImage(tmpCanvas, -sh / 2, -sw / 2, sh, sw);
-      } else {
-        ctx.drawImage(tmpCanvas, -sw / 2, -sh / 2, sw, sh);
-      }
-      ctx.restore();
-
-      // Label each quadrant for debugging (tiny text)
-      ctx.fillStyle = "rgba(0,0,0,0.5)";
-      ctx.fillRect(offsetX, offsetY, 30, 14);
-      ctx.fillStyle = "white";
-      ctx.font = "10px monospace";
-      ctx.fillText(`${deg}°`, offsetX + 2, offsetY + 11);
-    };
-
-    drawRotated(0,   0,  0);     // Top-left
-    drawRotated(90,  sw, 0);     // Top-right
-    drawRotated(180, 0,  sh);    // Bottom-left
-    drawRotated(270, sw, sh);    // Bottom-right
-
-    const base64Data = canvas.toDataURL("image/jpeg", 0.75);
+    const base64Data  = canvas.toDataURL("image/jpeg", 0.85);
     const base64Image = base64Data.split(",")[1];
 
     setCapturedImage(base64Data);

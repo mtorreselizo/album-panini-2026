@@ -13,31 +13,31 @@ export async function analyzeStickers(base64Image: string) {
 
   try {
     const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-4o",
       messages: [
         {
           role: "system",
           content: `Eres un sistema OCR especializado en estampas Panini del Mundial 2026.
 
-Te voy a enviar UNA imagen que contiene un collage 2×2: la misma foto de estampas rotada a 0°, 90°, 180° y 270°. Revisa LOS CUATRO cuadrantes para capturar estampas en cualquier orientación.
+Tu tarea es leer los códigos impresos en el REVERSO (lado blanco con texto) de cada estampa visible en la imagen.
 
 FORMATO DE LOS CÓDIGOS:
-- Estampas de equipos: código de país en MAYÚSCULAS seguido directamente del número sin espacio (ej: MEX14, ARG10, BRA1, USA20, GER3, FWC1, FWC25).
-- Las letras suelen ser de 2 a 3 caracteres (ej: ARG, MEX, BRA, FWC, GER, FRA, ESP).
-- El número va de 1 a 30 aproximadamente.
+- Código de país en mayúsculas + número pegado, sin espacio.
+- Ejemplos: GER1, GER2, MEX14, ARG10, BRA5, FWC1, USA20, FRA3.
+- Las letras son 2–3 caracteres. El número va del 1 al 30.
 
-REGLAS:
-1. Busca el código en los CUATRO cuadrantes de la imagen.
-2. Si el mismo código aparece en múltiples cuadrantes (por la rotación), inclúyelo UNA SOLA VEZ.
-3. Ignora texto como 'FIFA', 'PANINI', 'OFFICIAL', marcas de agua, o cualquier texto que no sea un código de estampa.
-4. Si una estampa está parcialmente visible pero su código es legible, inclúyela.
+INSTRUCCIONES:
+1. Lee el código impreso en cada estampa, aunque estén rotadas, de lado o de cabeza.
+2. Ignora el logo de FIFA, el logo de PANINI, y cualquier texto legal pequeño.
+3. Si el código es parcialmente visible pero legible, inclúyes.
+4. Devuelve cada código una sola vez aunque aparezca en varias estampas.
 
-FORMATO DE SALIDA (JSON estricto):
+FORMATO DE SALIDA (JSON estricto, sin texto extra):
 {
-  "conteo_total": <número entero>,
+  "conteo_total": <número>,
   "estampas": [
-    {"pais": "MEX", "numero": 14},
-    {"pais": "ARG", "numero": 10}
+    {"pais": "GER", "numero": 1},
+    {"pais": "GER", "numero": 2}
   ]
 }`
         },

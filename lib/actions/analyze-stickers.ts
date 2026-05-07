@@ -63,8 +63,20 @@ export async function analyzeStickers(base64Image: string) {
       .filter((s: string) => s.length > 0);
 
     return stickers;
-  } catch (error) {
-    console.error("Error analyzing stickers:", error);
-    throw new Error("No se pudo analizar la imagen. Intenta de nuevo.");
+  } catch (error: any) {
+    console.error("OpenAI Analysis Error:", error);
+    
+    // Handle specific OpenAI errors
+    if (error.status === 401) {
+      throw new Error("Error de autenticación: La API Key de OpenAI es inválida.");
+    }
+    if (error.status === 429) {
+      throw new Error("Límite de cuota excedido: Revisa tu plan de OpenAI.");
+    }
+    if (error.status === 413) {
+      throw new Error("Imagen demasiado grande para procesar.");
+    }
+    
+    throw new Error(error.message || "No se pudo analizar la imagen. Intenta de nuevo.");
   }
 }

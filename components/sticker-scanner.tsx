@@ -74,6 +74,7 @@ export function StickerScanner({ isOpen, onClose, onImport }: StickerScannerProp
   const [step, setStep] = useState<"camera" | "loading" | "results">("camera");
   const [results, setResults] = useState<string[]>([]);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [isCameraActive, setIsCameraActive] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -163,14 +164,16 @@ export function StickerScanner({ isOpen, onClose, onImport }: StickerScannerProp
     setCapturedImage(base64Data);
     stopCamera();
     setStep("loading");
+    setError(null);
     
     try {
       const stickers = await analyzeStickers(base64Image);
       setResults(stickers);
       setStep("results");
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      toast.error("Error al analizar la imagen.");
+      setError(err.message || "Error al analizar la imagen.");
+      toast.error(err.message || "Error al analizar la imagen.");
       setStep("camera");
     }
   };
@@ -195,6 +198,7 @@ export function StickerScanner({ isOpen, onClose, onImport }: StickerScannerProp
     setStep("camera");
     setResults([]);
     setCapturedImage(null);
+    setError(null);
     stopCamera();
   };
 
@@ -220,6 +224,11 @@ export function StickerScanner({ isOpen, onClose, onImport }: StickerScannerProp
         <div className="flex-1 overflow-y-auto py-4">
           {step === "camera" && (
             <div className="flex flex-col items-center gap-4">
+              {error && (
+                <div className="w-full p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-destructive text-sm text-center">
+                  {error}
+                </div>
+              )}
               <div className="relative w-full aspect-[3/4] bg-muted rounded-xl overflow-hidden border-2 border-border shadow-inner">
                 <video 
                   ref={videoRef} 

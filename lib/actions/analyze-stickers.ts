@@ -52,16 +52,31 @@ export async function analyzeStickers(base64Image: string) {
         },
       ],
       response_format: { type: "json_object" },
+    }, {
+      signal: AbortSignal.timeout(30000), // 30 second timeout
     });
 
-    const content = response.choices[0]?.message?.content || "{}";
-    const parsed = JSON.parse(content);
-    
+    const rawContent = response.choices[0]?.message?.content;
+    console.log("[analyzeStickers] Raw OpenAI response:", rawContent);
+
+    if (!rawContent) {
+      throw new Error("OpenAI no devolvió ningún contenido. Intenta de nuevo.");
+    }
+
+    let parsed: any;
+    try {
+      parsed = JSON.parse(rawContent);
+    } catch {
+      console.error("[analyzeStickers] JSON parse failed. Content:", rawContent);
+      throw new Error("La respuesta de OpenAI no es un JSON válido. Intenta de nuevo.");
+    }
+
     // Transform the new structure back to the simple string array the app expects
     const stickers = (parsed.estampas || [])
       .map((item: any) => `${item.pais}${item.numero}`.toUpperCase().replace(/\s+/g, ''))
       .filter((s: string) => s.length > 0);
 
+    console.log(`[analyzeStickers] Detected ${stickers.length} stickers:`, stickers);
     return stickers;
   } catch (error: any) {
     console.error("OpenAI Analysis Error:", error);

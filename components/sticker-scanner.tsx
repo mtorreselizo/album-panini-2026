@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Camera, X, Check, Trash2, Edit2, RotateCcw, Sparkles, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -12,12 +12,12 @@ import { toast } from "sonner";
 function RobotAnimation({ message }: { message: string }) {
   const [dots, setDots] = useState(0);
   
-  useState(() => {
+  useEffect(() => {
     const interval = setInterval(() => {
       setDots(d => (d + 1) % 4);
     }, 500);
     return () => clearInterval(interval);
-  });
+  }, []);
   
   return (
     <div className="flex flex-col items-center justify-center py-12 px-4">
@@ -170,10 +170,15 @@ export function StickerScanner({ isOpen, onClose, onImport }: StickerScannerProp
       const stickers = await analyzeStickers(base64Image);
       setResults(stickers);
       setStep("results");
+      // Warn the user if nothing was detected (not necessarily an error)
+      if (stickers.length === 0) {
+        toast.warning("No se detectaron estampas. Intenta con mejor iluminación o más cerca.");
+      }
     } catch (err: any) {
-      console.error(err);
-      setError(err.message || "Error al analizar la imagen.");
-      toast.error(err.message || "Error al analizar la imagen.");
+      console.error("[StickerScanner] Error from analyzeStickers:", err);
+      const msg = err?.message || "Error desconocido al analizar la imagen.";
+      setError(msg);
+      toast.error(msg);
       setStep("camera");
     }
   };

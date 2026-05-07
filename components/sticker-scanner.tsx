@@ -129,12 +129,32 @@ export function StickerScanner({ isOpen, onClose, onImport }: StickerScannerProp
     canvas.width = width;
     canvas.height = height;
     
-    const context = canvas.getContext("2d");
+    const context = canvas.getContext("2d", { willReadFrequently: true });
     if (!context) return;
     
-    // Pre-procesamiento: Escala de grises y aumento de contraste/brillo para infalibilidad
-    context.filter = "grayscale(100%) contrast(140%) brightness(110%)";
+    // Dibujar imagen original
     context.drawImage(video, 0, 0, width, height);
+    
+    // Pre-procesamiento MANUAL (más compatible y seguro que context.filter)
+    const imageData = context.getImageData(0, 0, width, height);
+    const data = imageData.data;
+    const contrast = 40; // Aumento de contraste
+    const factor = (259 * (contrast + 255)) / (255 * (259 - contrast));
+
+    for (let i = 0; i < data.length; i += 4) {
+      // 1. Escala de grises (Luminancia)
+      const avg = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+      
+      // 2. Aplicar contraste sobre el gris
+      const color = factor * (avg - 128) + 128;
+      
+      data[i] = color;     // R
+      data[i + 1] = color; // G
+      data[i + 2] = color; // B
+      // data[i+3] es Alpha, se queda igual
+    }
+    
+    context.putImageData(imageData, 0, 0);
     
     // Comprimir calidad a 0.7 para reducir peso sin perder legibilidad
     const base64Data = canvas.toDataURL("image/jpeg", 0.7);

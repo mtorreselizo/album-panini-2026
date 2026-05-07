@@ -73,6 +73,7 @@ interface StickerScannerProps {
 export function StickerScanner({ isOpen, onClose, onImport }: StickerScannerProps) {
   const [step, setStep] = useState<"camera" | "loading" | "results">("camera");
   const [results, setResults] = useState<string[]>([]);
+  const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [isCameraActive, setIsCameraActive] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -136,8 +137,10 @@ export function StickerScanner({ isOpen, onClose, onImport }: StickerScannerProp
     context.drawImage(video, 0, 0, width, height);
     
     // Comprimir calidad a 0.7 para reducir peso sin perder legibilidad
-    const base64Image = canvas.toDataURL("image/jpeg", 0.7).split(",")[1];
+    const base64Data = canvas.toDataURL("image/jpeg", 0.7);
+    const base64Image = base64Data.split(",")[1];
     
+    setCapturedImage(base64Data);
     stopCamera();
     setStep("loading");
     
@@ -171,6 +174,7 @@ export function StickerScanner({ isOpen, onClose, onImport }: StickerScannerProp
   const resetScanner = () => {
     setStep("camera");
     setResults([]);
+    setCapturedImage(null);
     stopCamera();
   };
 
@@ -231,11 +235,29 @@ export function StickerScanner({ isOpen, onClose, onImport }: StickerScannerProp
           )}
 
           {step === "loading" && (
-            <RobotAnimation message="Analizando tu colección con inteligencia artificial" />
+            <div className="space-y-4">
+              {capturedImage && (
+                <div className="relative w-full aspect-video bg-black rounded-lg overflow-hidden border border-border">
+                  <img src={capturedImage} alt="Captured" className="w-full h-full object-contain" />
+                  <div className="absolute top-2 left-2 bg-black/60 text-[10px] text-white px-2 py-1 rounded">
+                    VISTA PREVIA (PROCESADA)
+                  </div>
+                </div>
+              )}
+              <RobotAnimation message="Analizando tu colección con inteligencia artificial" />
+            </div>
           )}
 
           {step === "results" && (
             <div className="space-y-4">
+              {capturedImage && (
+                <div className="relative w-full aspect-video bg-black rounded-lg overflow-hidden border border-border">
+                  <img src={capturedImage} alt="Captured" className="w-full h-full object-contain" />
+                  <div className="absolute top-2 left-2 bg-black/60 text-[10px] text-white px-2 py-1 rounded">
+                    VISTA PREVIA (PROCESADA)
+                  </div>
+                </div>
+              )}
               <div className="bg-accent/10 rounded-lg p-4 border border-accent/20">
                 <h3 className="text-sm font-semibold mb-1">Resultados Identificados</h3>
                 <p className="text-xs text-muted-foreground">

@@ -106,14 +106,37 @@ export function StickerScanner({ isOpen, onClose, onImport }: StickerScannerProp
 
     const video = videoRef.current;
     const canvas = canvasRef.current;
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    
+    // Compresión inteligente: Redimensionar a un máximo de 1000px manteniendo proporción
+    const maxWidth = 1000;
+    const maxHeight = 1000;
+    let width = video.videoWidth;
+    let height = video.videoHeight;
+
+    if (width > height) {
+      if (width > maxWidth) {
+        height *= maxWidth / width;
+        width = maxWidth;
+      }
+    } else {
+      if (height > maxHeight) {
+        width *= maxHeight / height;
+        height = maxHeight;
+      }
+    }
+
+    canvas.width = width;
+    canvas.height = height;
     
     const context = canvas.getContext("2d");
     if (!context) return;
     
-    context.drawImage(video, 0, 0, canvas.width, canvas.height);
-    const base64Image = canvas.toDataURL("image/jpeg", 0.8).split(",")[1];
+    // Pre-procesamiento: Escala de grises y aumento de contraste/brillo para infalibilidad
+    context.filter = "grayscale(100%) contrast(140%) brightness(110%)";
+    context.drawImage(video, 0, 0, width, height);
+    
+    // Comprimir calidad a 0.7 para reducir peso sin perder legibilidad
+    const base64Image = canvas.toDataURL("image/jpeg", 0.7).split(",")[1];
     
     stopCamera();
     setStep("loading");

@@ -102,70 +102,77 @@ export function StickerScanner({ isOpen, onClose, onImport }: StickerScannerProp
       setIsCameraActive(false);
     }
   };
-
   const capturePhoto = async () => {
     if (!videoRef.current || !canvasRef.current) return;
 
     const video = videoRef.current;
+    
+    // Step 1: Capture original frame at max 800px (smaller since we'll make 4 copies)
+    const MAX = 800;
+    let sw = video.videoWidth;
+    let sh = video.videoHeight;
+    if (sw > sh) { if (sw > MAX) { sh = Math.round(sh * MAX / sw); sw = MAX; } }
+    else          { if (sh > MAX) { sw = Math.round(sw * MAX / sh); sh = MAX; } }
+
+    // Step 2: Draw the original into a temporary canvas
+    const tmpCanvas = document.createElement("canvas");
+    tmpCanvas.width = sw;
+    tmpCanvas.height = sh;
+    const tmpCtx = tmpCanvas.getContext("2d", { willReadFrequently: true })!;
+    tmpCtx.drawImage(video, 0, 0, sw, sh);
+
+    // Step 3: Boost color contrast WITHOUT grayscale — AI vision models work better in color
+    const imageData = tmpCtx.getImageData(0, 0, sw, sh);
+    const d = imageData.data;
+    const CONTRAST = 30; // Gentle contrast boost, keeps color intact
+    const factor = (259 * (CONTRAST + 255)) / (255 * (259 - CONTRAST));
+    for (let i = 0; i < d.length; i += 4) {
+      d[i]     = Math.min(255, Math.max(0, factor * (d[i]     - 128) + 128)); // R
+      d[i + 1] = Math.min(255, Math.max(0, factor * (d[i + 1] - 128) + 128)); // G
+      d[i + 2] = Math.min(255, Math.max(0, factor * (d[i + 2] - 128) + 128)); // B
+    }
+    tmpCtx.putImageData(imageData, 0, 0);
+
+    // Step 4: Build a 2×2 collage with the image at 0°, 90°, 180°, 270°
+    // This lets the AI see all rotations in ONE API call — no extra cost!
     const canvas = canvasRef.current;
-    
-    // Compresión inteligente: Redimensionar a un máximo de 1000px manteniendo proporción
-    const maxWidth = 1000;
-    const maxHeight = 1000;
-    let width = video.videoWidth;
-    let height = video.videoHeight;
+    canvas.width  = sw * 2;
+    canvas.height = sh * 2;
+    const ctx = canvas.getContext("2d")!;
 
-    if (width > height) {
-      if (width > maxWidth) {
-        height *= maxWidth / width;
-        width = maxWidth;
+    const drawRotated = (deg: number, offsetX: number, offsetY: number) => {
+      ctx.save();
+      ctx.translate(offsetX + sw / 2, offsetY + sh / 2);
+      ctx.rotate((deg * Math.PI) / 180);
+      // For 90° and 270°, swap w/h visually
+      if (deg === 90 || deg === 270) {
+        ctx.drawImage(tmpCanvas, -sh / 2, -sw / 2, sh, sw);
+      } else {
+        ctx.drawImage(tmpCanvas, -sw / 2, -sh / 2, sw, sh);
       }
-    } else {
-      if (height > maxHeight) {
-        width *= maxHeight / height;
-        height = maxHeight;
-      }
-    }
+      ctx.restore();
 
-    canvas.width = width;
-    canvas.height = height;
-    
-    const context = canvas.getContext("2d", { willReadFrequently: true });
-    if (!context) return;
-    
-    // Dibujar imagen original
-    context.drawImage(video, 0, 0, width, height);
-    
-    // Pre-procesamiento MANUAL (más compatible y seguro que context.filter)
-    const imageData = context.getImageData(0, 0, width, height);
-    const data = imageData.data;
-    const contrast = 40; // Aumento de contraste
-    const factor = (259 * (contrast + 255)) / (255 * (259 - contrast));
+      // Label each quadrant for debugging (tiny text)
+      ctx.fillStyle = "rgba(0,0,0,0.5)";
+      ctx.fillRect(offsetX, offsetY, 30, 14);
+      ctx.fillStyle = "white";
+      ctx.font = "10px monospace";
+      ctx.fillText(`${deg}°`, offsetX + 2, offsetY + 11);
+    };
 
-    for (let i = 0; i < data.length; i += 4) {
-      // 1. Escala de grises (Luminancia)
-      const avg = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
-      
-      // 2. Aplicar contraste sobre el gris
-      const color = factor * (avg - 128) + 128;
-      
-      data[i] = color;     // R
-      data[i + 1] = color; // G
-      data[i + 2] = color; // B
-      // data[i+3] es Alpha, se queda igual
-    }
-    
-    context.putImageData(imageData, 0, 0);
-    
-    // Comprimir calidad a 0.7 para reducir peso sin perder legibilidad
-    const base64Data = canvas.toDataURL("image/jpeg", 0.7);
+    drawRotated(0,   0,  0);     // Top-left
+    drawRotated(90,  sw, 0);     // Top-right
+    drawRotated(180, 0,  sh);    // Bottom-left
+    drawRotated(270, sw, sh);    // Bottom-right
+
+    const base64Data = canvas.toDataURL("image/jpeg", 0.75);
     const base64Image = base64Data.split(",")[1];
-    
+
     setCapturedImage(base64Data);
     stopCamera();
     setStep("loading");
     setError(null);
-    
+
     try {
       const stickers = await analyzeStickers(base64Image);
       setResults(stickers);

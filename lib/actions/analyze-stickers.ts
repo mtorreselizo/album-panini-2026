@@ -13,18 +13,24 @@ export async function analyzeStickers(base64Image: string) {
 
   try {
     const response = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: "gpt-4o-mini",
       messages: [
         {
           role: "system",
-          content: "Eres un experto en el álbum Panini de la Copa Mundial 2026. Tu tarea es identificar los códigos de las estampas en la imagen proporcionada. Los códigos suelen tener un formato de 3 letras del país seguidas de un número (ej. MEX14, ARG10, BRA1, USA20) o FWC seguido de un número (ej. FWC1, FWC25). Responde EXCLUSIVAMENTE con una lista de códigos separados por comas, sin texto adicional."
+          content: `Eres un experto en el álbum Panini de la Copa Mundial 2026. 
+          Tu tarea es identificar los códigos de las estampas en la imagen. 
+          
+          REGLAS CRÍTICAS:
+          1. Los códigos tienen formato: [PAÍS][NÚMERO] (ej. MEX14, ARG10, BRA1) o FWC[NÚMERO] (ej. FWC1).
+          2. IMPORTANTE: Las estampas pueden estar rotadas, de lado o de cabeza. Analiza la imagen desde todas las orientaciones posibles para encontrar los códigos.
+          3. Responde EXCLUSIVAMENTE en formato JSON con la siguiente estructura: {"stickers": ["CODIGO1", "CODIGO2"]}`
         },
         {
           role: "user",
           content: [
             {
               type: "text",
-              text: "Identifica todas las estampas Panini en esta imagen. Devuelve solo los códigos (ej. MEX14, FWC2) separados por comas."
+              text: "Identifica todas las estampas Panini en esta imagen, sin importar su orientación. Devuelve el JSON con los códigos."
             },
             {
               type: "image_url",
@@ -35,14 +41,14 @@ export async function analyzeStickers(base64Image: string) {
           ],
         },
       ],
+      response_format: { type: "json_object" },
     });
 
-    const content = response.choices[0]?.message?.content || "";
-    // Clean up the response and split into an array
-    const stickers = content
-      .split(",")
-      .map((s) => s.trim().toUpperCase())
-      .filter((s) => s.length > 0);
+    const content = response.choices[0]?.message?.content || "{}";
+    const parsed = JSON.parse(content);
+    const stickers = (parsed.stickers || [])
+      .map((s: string) => s.trim().toUpperCase())
+      .filter((s: string) => s.length > 0);
 
     return stickers;
   } catch (error) {

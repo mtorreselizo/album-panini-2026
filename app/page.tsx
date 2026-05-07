@@ -8,6 +8,7 @@ import { MissingList } from "@/components/missing-list";
 import { SplashScreen } from "@/components/splash-screen";
 import { ImportExportButtons } from "@/components/import-export-buttons";
 import { SmartExchangeFullscreen } from "@/components/smart-exchange";
+import { StickerScanner } from "@/components/sticker-scanner";
 import { useCollection } from "@/hooks/use-collection";
 import { createClient } from "@/lib/supabase/client";
 import type { ViewingAlbum, User, CollectionState } from "@/lib/types";
@@ -22,6 +23,7 @@ export default function Home() {
   const [isLoadingFriend, setIsLoadingFriend] = useState(false);
   const [myOwnCollection, setMyOwnCollection] = useState<CollectionState>({});
   const [showSmartExchange, setShowSmartExchange] = useState(false);
+  const [showScanner, setShowScanner] = useState(false);
   
   const supabase = createClient();
   
@@ -31,6 +33,7 @@ export default function Home() {
     stats,
     getQuantity,
     addSticker,
+    bulkAddStickers,
     removeSticker,
     duplicateStickers,
     missingStickers,
@@ -119,6 +122,7 @@ export default function Home() {
         myCollection={currentViewing ? myOwnCollection : undefined}
         friendCollection={friendAlbumData?.collection}
         onOpenSmartExchange={() => setShowSmartExchange(true)}
+        onOpenScanner={() => setShowScanner(true)}
       />
 
       {isLoadingFriend ? (
@@ -173,6 +177,16 @@ export default function Home() {
           onClose={() => setShowSmartExchange(false)}
         />
       )}
+
+      {/* Sticker Scanner */}
+      <StickerScanner
+        isOpen={showScanner}
+        onClose={() => setShowScanner(false)}
+        onImport={(stickers) => {
+          bulkAddStickers(stickers);
+          setShowScanner(false);
+        }}
+      />
     </main>
   );
 }

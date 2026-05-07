@@ -221,6 +221,20 @@ export function useCollection(options: UseCollectionOptions = {}) {
     }));
   }, [isReadOnly]);
 
+  const bulkAddStickers = useCallback((stickerNumbers: string[]) => {
+    if (isReadOnly || stickerNumbers.length === 0) return;
+    setCollection(prev => {
+      const next = { ...prev };
+      for (const num of stickerNumbers) {
+        next[num] = {
+          stickerNumber: num,
+          quantity: (next[num]?.quantity || 0) + 1,
+        };
+      }
+      return next;
+    });
+  }, [isReadOnly]);
+
   const removeSticker = useCallback((stickerNumber: string) => {
     if (isReadOnly) return;
     setCollection(prev => {
@@ -308,6 +322,7 @@ export function useCollection(options: UseCollectionOptions = {}) {
   return {
     collection,
     addSticker,
+    bulkAddStickers,
     removeSticker,
     getQuantity,
     isOwned,

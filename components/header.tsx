@@ -1,6 +1,6 @@
 "use client";
 
-import { Trophy, Repeat, Search, Eye } from "lucide-react";
+import { Trophy, Repeat, Search, Eye, Camera } from "lucide-react";
 import type { AlbumStats, User, ViewingAlbum, CollectionState } from "@/lib/types";
 import { AlbumSelector } from "./album-selector";
 import { SmartExchangeButton } from "./smart-exchange";
@@ -16,9 +16,10 @@ interface HeaderProps {
   myCollection?: CollectionState;
   friendCollection?: CollectionState;
   onOpenSmartExchange?: () => void;
+  onOpenScanner?: () => void;
 }
 
-export function Header({ stats, activeTab, onTabChange, user, isSyncing, currentViewing, onViewAlbum, myCollection, friendCollection, onOpenSmartExchange }: HeaderProps) {
+export function Header({ stats, activeTab, onTabChange, user, isSyncing, currentViewing, onViewAlbum, myCollection, friendCollection, onOpenSmartExchange, onOpenScanner }: HeaderProps) {
   const isViewingFriend = currentViewing !== null;
   return (
     <header className="sticky top-0 z-50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b border-border">
@@ -86,7 +87,7 @@ export function Header({ stats, activeTab, onTabChange, user, isSyncing, current
         </div>
 
         {/* Stats cards */}
-        <div className="grid grid-cols-3 gap-2 mb-4">
+        <div className="grid grid-cols-4 gap-2 mb-4">
           <div className="bg-card rounded-lg p-2 text-center border border-border">
             <div className="text-lg font-bold text-primary">{stats.owned}</div>
             <div className="text-xs text-muted-foreground">Tengo</div>
@@ -99,6 +100,16 @@ export function Header({ stats, activeTab, onTabChange, user, isSyncing, current
             <div className="text-lg font-bold text-accent">{stats.duplicates}</div>
             <div className="text-xs text-muted-foreground">Repetidas</div>
           </div>
+          <button 
+            onClick={onOpenScanner}
+            disabled={isViewingFriend}
+            className="bg-card rounded-lg p-2 text-center border border-border hover:bg-accent/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <div className="flex justify-center mb-1">
+              <Camera className="w-6 h-6 text-primary" />
+            </div>
+            <div className="text-xs text-muted-foreground">Escanear</div>
+          </button>
         </div>
 
         {/* Navigation tabs */}
